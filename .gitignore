@@ -18,8 +18,14 @@ voices/
 *.gguf
 *.onnx
 *.onnx.json
-dot-agent/*.dex
-dot-agent/*.dex.bak*
+**/dot-agent/*.dex
+**/dot-agent/*.dex.bak*
+
+# Android build leftovers (never commit a keystore or a local SDK path)
+local.properties
+*.jks
+*.apk
+*.aab
 
 # Runtime data
 logs/
@@ -27,6 +33,8 @@ inbox/
 replies/
 *.jsonl
 *.wav
+# Example clips shipped with a device page, not runtime recordings
+!devices/fire-tablet/host/samples/*.wav
 *.log
 
 # adb / device keys

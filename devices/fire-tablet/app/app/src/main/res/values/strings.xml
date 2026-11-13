@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Paula &amp; Liam</string>
+    <string name="hold">Hold to talk</string>
+    <string name="listening">Listening…</string>
+    <string name="portrait">Portrait</string>
+    <string name="sarah">PAULA</string>
+    <string name="james">LIAM</string>
+</resources>
