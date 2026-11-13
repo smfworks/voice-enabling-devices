@@ -1,0 +1,12 @@
+[Unit]
+Description=Optional Fire HD 8 adb keepalive (USB reverse when plugged)
+After=tablet-voice.service
+
+[Service]
+# Requires TABLET_SERIAL and TABLET_WIFI in the environment or a drop-in.
+ExecStart=%h/tablet-voice/keep-adb.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

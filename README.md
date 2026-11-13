@@ -1,139 +1,44 @@
-# How I Turned an Old 2nd-Gen Echo Dot into a Realtime Voice Line to My AI Chief of Staff
+<img src="images/hero.jpg" alt="Old smart speaker, round bedside display and tablet on a neon workbench, sending voice to a network of colorful AI agent faces" width="100%">
 
-Public how-to companion to the X article:
+*Hero image generated with Grok Imagine.*
 
-- **Article:** https://x.com/MichaelGannotti/status/2113372170596634942
-- **Demo video:** https://x.com/MichaelGannotti/status/2113357366846448033
+# Voice-enabling devices
 
-I had an old 2nd-gen Echo Dot sitting in a drawer. Today it is a push-to-talk voice line to Charlie, my Grok Bot chief of staff. I unmute the mic, I hear a beep, and I am talking to Charlie. I mute it and the conversation ends with a low beep.
+**SMF Works**
 
-This repository is a **sanitized** snapshot of the post-root software: the on-device agent, the Python bridge, and a systemd unit. It is published by **SMF Works**.
+Old smart speakers and tablets still have a microphone, a speaker, and sometimes a screen. The assistant they shipped with gets slower, narrower, or switched off, and the hardware ends up in a drawer. The plastic is fine. The mic still hears you. This collection is how to give that hardware a second life: keep the device, and point it at an AI agent you already run.
 
-## Important limits
+The repository is **voice-enabling-devices**.
 
-- **A 2nd-gen Echo Dot that is already rooted is required.** This repo does **not** explain how to root, jailbreak, unlock, or patch the device. If you go down that road, do your own research and be responsible about it.
-- **Only touch devices you own.** Rooting can brick the device.
-- Wireless `adb` should be started by **whatever post-root hook you already have**. This repo does not ship boot-hook recipes or name a particular root framework.
-- Never commit `config.env`. Copy `config.env.example`, fill in your own values, and `chmod 600` the real file.
+## The pattern
 
-## What you need
+A retired device becomes a voice or face front end. The model, the memory, and the real work stay on a computer you control. The device and that computer meet over Wi-Fi.
 
-- A **2nd-gen Echo Dot that is already rooted**
-- An **always-on Linux box** (any distro; the sample unit uses a systemd user service)
-- **Home Wi-Fi** for the Dot, plus **adb** (Android Debug Bridge) on the Linux box
-- **Python 3** and a virtualenv for the bridge
-- A **voice brain** — this build uses xAI realtime voice (`grok-voice-3.0`, male voice Rex)
-- An **AI agent webhook** for real work handoff (Charlie, in my case)
+- You start a turn on purpose: a mute key, a hold-to-talk button, or a tap. The line is not open all day.
+- Audio moves between the device and a small bridge on your computer.
+- Casual talk can stay on a realtime voice model. A request that needs tools, mail, a calendar, or private facts is handed to an agent, and the spoken answer comes back through the same speaker.
 
-## Architecture
+Each device folder is a how-to plus the reference code for that front end. The steps assume the device is **already prepared** and on your network.
 
-```
-Echo Dot (already rooted)              Always-on Linux box
-┌─────────────────────────┐  adb over  ┌────────────────────────────────┐
-│ small agent on Dot      │◄───Wi-Fi──►│ Python bridge (systemd user)   │
-│ mute key / mic / speaker│            │ brain: xAI realtime voice      │
-└─────────────────────────┘            └───────────────┬────────────────┘
-                                                       │ handoff (webhook)
-                                                       ▼
-                                               your AI chief of staff
-```
+## Out of scope
 
-- **On the Dot:** `dot-agent/DotAgent.java` watches the mute button, streams mic audio (16 kHz mono) out, and plays audio it gets back. It stops listening while it is talking so it does not hear itself.
-- **Over adb:** the Linux box connects to the Dot over Wi-Fi and forwards a **local** port to the agent. Nothing needs to listen openly on your LAN. Authorize **only** your Linux box's adb key on the Dot.
-- **On the Linux box:** `bridge/bridge.py` keeps the connection alive, relaunches the Dot agent if it dies, and moves audio between the Dot and the voice brain.
-- **Handoff:** a status or real-work ask stays quiet. The realtime brain calls `handoff_to_charlie` and does not speak. The fast brain begins with `[HANDOFF]` and nothing else. The bridge POSTs `handoff: true`, waits for `~/charlie-voice/inbox/<session>-<turn>.txt`, and speaks that reply verbatim in the same Rex voice. If the agent does not answer in time, or the webhook fails, it says `I don't have that update yet.`
+**Rooting, unlocking, bootloader changes, and privileged system installs are out of scope and are not documented here.** This repository does not include exploits or recipes for installing into system or priv-app locations. When a device page says the hardware must already be rooted, that is a prerequisite, not a guide. Only work on devices you own.
 
-## Post-root steps (high level)
+Do not commit secrets. API keys, tokens, webhook URLs, ntfy topics, keystores, device serials, MAC addresses, SSIDs, LAN addresses, and personal home paths stay on your machine. Examples in this repo use placeholders such as `<HOST_IP>`, `<TABLET_IP>`, `DOT_HOST`, `<YOUR_WEBHOOK_URL>`, and `<YOUR_WEBHOOK_KEY>`.
 
-1. **Put the Dot on your home Wi-Fi** and give it a **reserved IP** in your router so the address does not wander. Use that address as `DOT_ADB=DOT_HOST:5555` in `config.env` (replace the placeholder).
-2. **Set up wireless adb** from your Linux box and authorize only that box's key. Lock adb down so only that box can reach it. Start wireless adb from your existing post-root hook; do not leave adb open to the whole LAN.
-3. **Build and push the Dot agent** (`dot-agent/DotAgent.java` → dex). The bridge can push and launch it over adb, so the agent does not need to auto-start on the Dot.
-4. **Forward a port with adb** so the bridge talks to the agent through localhost (`LOCAL_PORT` → `BRIDGE_PORT`). On this older Fire OS, reverse forwarding is refused, so forward from the Linux side.
-5. **Configure the bridge.** Copy `config.env.example` → `~/charlie-voice/config.env`, fill in webhook + `XAI_VOICE_API_KEY`, keep it mode `600`. Install deps into `.venv`, then enable `systemd/charlie-voice.service` as a user unit (`%h` paths only).
-6. **Drive sessions from the real mic state.** Real audio means unmuted → start a session (high beep). Exact zeros mean muted → end it (low beep). Do not count button presses; the hardware mute returns exact zeros.
-7. **Connect realtime voice.** Open a WebSocket on unmute (`wss://api.x.ai/v1/realtime`, model `grok-voice-3.0`, voice `rex`) and close it on mute. Stream mic audio up; play 48 kHz PCM back down to the Dot.
-8. **Hand off quietly.** The personas no longer tell the model to say a team holding line such as "Let me check with the team on that, one moment" or "Let me pass that to the team, one moment." A status or handoff ask calls `handoff_to_charlie` (realtime) or starts with `[HANDOFF]` (fast brain) and stays silent: no team-holding line, no promised follow-up. The bridge POSTs `handoff: true` to `CHARLIE_WEBHOOK_URL`, waits for `~/charlie-voice/inbox/<session>-<turn>.txt`, and speaks that file verbatim in the same Rex voice. If you mute before the answer arrives, a speak-only session still delivers Charlie's text, or the same timeout line. If Charlie does not answer in time, or the webhook fails, the Dot says `I don't have that update yet.` instead of going silent. If the model improvises a holding line anyway (checking, passing, or waiting on the team, "let you know," "one moment," and similar), the bridge strips it and does not speak it.
-9. **Add a cost guard.** Default cap is **15 minutes** per session (`RT_MAX_SECS=900`). At the limit it says goodbye and hangs up.
+## Devices
 
-## Lessons learned
+| Device | Summary | Status |
+| --- | --- | --- |
+| [Echo Dot (2nd gen)](devices/echo-dot/README.md) | Push-to-talk realtime voice line from the Dot's mute key to an AI agent. | Documented |
+| [Fire Tablet (Fire HD 8, 2016)](devices/fire-tablet/README.md) | Hold-to-talk faces, Paula and Liam, posting speech to a host bridge over Wi-Fi. | Documented |
+| [Echo Spot (2017)](devices/echo-spot/README.md) | Tap-to-talk round face (SpotEyes) with eight agents and a spoken handoff. | Documented |
+| [Echo Show 5](devices/echo-show-5/README.md) | A screen-and-speaker front end in the same pattern. | Coming next week |
 
-**No sound at all? Check the level first.** Playback can be effectively silent when gain is too low. Raising the level to about 80% of full scale fixed it. An amplifier mute control was a red herring.
+## Adding a device
 
-**Clicks came from fighting the Dot's own audio system.** Playing through the normal audio path (and restarting the audio service when needed) fixed it. Clean every clip before sending it:
-
-- remove the DC offset
-- resample everything to 48 kHz (mixed sample rates caused glitches)
-- add short fade-ins and fade-outs
-- pad the clip a little
-- send it in one piece, or with a small prebuffer when streaming
-
-**The mute button is a hardware switch.** A muted mic does not go quiet — it returns exact zeros. Following the real mic signal made sessions rock solid.
-
-**Latency is everything in voice.**
-
-| Brain | Result |
-|---|---|
-| Webhook straight to the agent routine | About a 10-second lag. Basically useless for talking. |
-| Local Qwen2.5-3B on llama.cpp | Fast, but the answers were poor. |
-| Warm Grok CLI + local speech-to-text and text-to-speech | 2 to 4 seconds. "So so." |
-| xAI realtime, grok-voice-3.0, male voice Rex | Natural back-and-forth. "Worked perfect." |
-
-**Keep it one voice.** Late handoff answers are spoken in the same realtime Rex voice, including after you mute. Mixing a second TTS voice for sign-offs sounded jarring.
-
-**Stay quiet while Charlie answers.** The holding line made the Dot promise a follow-up it did not have. The realtime and fast personas now tell the model to call `handoff_to_charlie` or begin with `[HANDOFF]` and stay silent. The bridge posts `handoff: true`, waits for the inbox file, and speaks Charlie's text verbatim. An improvised holding line is cut. If the wait times out or the webhook fails, the line is `I don't have that update yet.` Muting early does not drop it: a speak-only session still says Charlie's text, or that same timeout line, in Rex's voice. `tests/test_handoff_quiet.py` checks this offline (`STUB_ECHO=1`).
-
-**Realtime details that mattered:**
-
-- the server does the voice detection
-- barge-in works; playback stops when you start talking
-- the WebSocket is only open while the mic is unmuted
-
-## Costs
-
-xAI realtime runs about **$0.08 per minute** while a session is open, so a 5-minute conversation is roughly **$0.40**. Because the line only opens on unmute and closes on mute, and each session is capped at 15 minutes, you are not paying for dead air.
-
-## What's next
-
-The realtime experience is the bar. Next step: swap in a **local realtime** brain (speech-to-speech or streaming STT → local LLM → streaming TTS) on a strong home box, by changing one endpoint. The bridge is shaped so that swap is a config change, not a rewrite.
-
-## Layout
-
-```
-bridge/bridge.py              # Linux-side bridge (systemd)
-dot-agent/DotAgent.java       # On-device agent source
-systemd/charlie-voice.service # User unit with %h paths
-config.env.example            # Key names + placeholders only
-tests/                        # Offline helpers (no secrets), including test_handoff_quiet.py
-ATTRIBUTION.md                # Grok Build / Grok Bot credit
-LICENSE                       # MIT (SMF Works)
-```
-
-## Quick start (after you already have a rooted Dot)
-
-```bash
-# on your Linux box
-mkdir -p ~/charlie-voice
-# copy this tree into ~/charlie-voice (or clone once you publish it)
-python3 -m venv ~/charlie-voice/.venv
-~/charlie-voice/.venv/bin/pip install numpy faster-whisper piper-tts websockets  # plus any extras you use
-cp config.env.example ~/charlie-voice/config.env
-chmod 600 ~/charlie-voice/config.env
-# edit config.env: DOT_ADB, XAI_VOICE_API_KEY, CHARLIE_WEBHOOK_*
-
-mkdir -p ~/.config/systemd/user
-cp systemd/charlie-voice.service ~/.config/systemd/user/
-systemctl --user daemon-reload
-systemctl --user enable --now charlie-voice
-```
-
-Build the Java agent into a dex with your usual Android build tools, push it to the Dot over adb, and let the bridge launch it. Exact compile commands vary by SDK install; the source of truth for framing is `DotAgent.java`.
-
-## Safety and privacy
-
-- Do not publish device serials, MACs, SSIDs, LAN IPs, adb private keys, webhook URLs, or API keys.
-- Keep adb reachable only from your Linux box.
-- Revoke `XAI_VOICE_API_KEY` in the xAI console if you retire the line.
+The next page is the Echo Show 5. New devices use the same folder shape and the same section order so a reader can move from one page to the next without learning a new layout. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
-MIT © SMF Works — see `LICENSE`.
+MIT © SMF Works. See [LICENSE](LICENSE). Credit for the original Echo Dot write-up is in [ATTRIBUTION.md](ATTRIBUTION.md).

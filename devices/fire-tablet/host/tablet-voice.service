@@ -1,0 +1,16 @@
+[Unit]
+Description=Fire HD 8 voice bridge (Paula + Liam)
+After=network-online.target
+
+[Service]
+ExecStart=%h/tablet-voice/.venv/bin/python %h/tablet-voice/bridge.py
+WorkingDirectory=%h/tablet-voice
+# For Wi-Fi, set TABLET_VOICE_LAN to the host address the tablet can reach
+# and add the tablet address to TABLET_VOICE_ALLOW, for example in a drop-in.
+Environment=TABLET_VOICE_HOST=127.0.0.1
+Environment=TABLET_VOICE_PORT=8766
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target
