@@ -1,3 +1,7 @@
+<img src="images/hero.jpg" alt="Old smart speaker, round bedside display and tablet on a neon workbench, sending voice to a network of colorful AI agent faces" width="100%">
+
+*Hero image generated with Grok Imagine.*
+
 # Voice-enabling devices
 
 **SMF Works**
